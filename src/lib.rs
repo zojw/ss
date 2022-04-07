@@ -14,7 +14,7 @@
 
 mod error;
 mod executor;
-mod reactor;
+mod io_ctx;
 mod rt;
 mod tcp;
 
@@ -23,16 +23,22 @@ mod tests {
     use futures::StreamExt;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-    use crate::{executor::Executor, tcp::TcpListener};
+    use crate::{
+        executor::{get_io_context, Executor},
+        io_ctx::{self, pull::EpollReactor},
+        tcp::TcpListener,
+    };
 
     #[test]
     fn it_works() {
-        let ex = Executor::new();
+        let ctx = io_ctx::IoContext::new(EpollReactor::new());
+        let ex = Executor::new(ctx);
         ex.block_on(s);
     }
 
     async fn s() {
-        let mut listener = TcpListener::bind("127.0.0.1:30000").unwrap();
+        let ctx = get_io_context();
+        let mut listener = TcpListener::bind("127.0.0.1:30000", ctx).unwrap();
         while let Some(ret) = listener.next().await {
             if let Ok((mut stream, addr)) = ret {
                 println!("accept a new connection from {} successfully", addr);

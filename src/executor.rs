@@ -24,27 +24,25 @@ use std::{
 
 use futures::{future::LocalBoxFuture, Future, FutureExt};
 
-use crate::reactor::Reactor;
+use crate::io_ctx::{pull::EpollReactor, IoContext, IoService};
 
 scoped_tls::scoped_thread_local!(pub(crate) static EX: Executor);
 
+pub(crate) fn get_io_context() -> IoContext<EpollReactor> {
+    EX.with(|ex| ex.ctx.clone())
+}
+
 pub struct Executor {
     local_queue: TaskQueue,
-    pub(crate) reactor: Rc<RefCell<Reactor>>,
+    pub(crate) ctx: IoContext<EpollReactor>,
     _marker: PhantomData<Rc<()>>,
 }
 
-impl Default for Executor {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Executor {
-    pub fn new() -> Self {
+    pub fn new(reactor: IoContext<EpollReactor>) -> Self {
         Self {
             local_queue: TaskQueue::default(),
-            reactor: Rc::new(RefCell::new(Reactor::default())),
+            ctx: reactor,
             _marker: PhantomData,
         }
     }
@@ -87,7 +85,7 @@ impl Executor {
                 }
 
                 // block for io
-                self.reactor.borrow_mut().wait();
+                (*self.ctx.get_io_service()).borrow_mut().wait();
             }
         })
     }
